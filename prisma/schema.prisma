@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Changed to sqlite for local AI Studio environment. 
+  // Change back to "postgresql" and use env("DATABASE_URL") for production.
+  provider = "sqlite"
+  url      = "file:./ledger.db"
+}
+
+model User {
+  id               String   @id @default(uuid())
+  full_name        String
+  email            String   @unique
+  role             String
+  timezone         String   @default("UTC")
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+  tasks            Task[]   @relation("TaskOwner")
+  notifications    Notification[]
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  user_id    String
+  message    String
+  read       Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  user       User     @relation(fields: [user_id], references: [id])
+}
+
+model Project {
+  id                       String   @id @default(uuid())
+  name                     String
+  code                     String   @unique
+  client_name              String?
+  owner_user_id            String
+  support_team             String?
+  client_poc               String?
+  preferred_contact_method String?
+  project_links            String?
+  tools_platform           String?
+  logins                   String?
+  status                   String   @default("Pending")
+  priority                 String   @default("Medium")
+  target_start_date        DateTime?
+  target_end_date          DateTime?
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+  tasks                    Task[]
+}
+
+model Task {
+  id                   String   @id @default(uuid())
+  task_code            String   @unique
+  title                String
+  owner_user_id        String?
+  project_id           String?
+  source_type          String   @default("manual") // manual, meeting_notes, ai_extracted
+  task_date            DateTime?
+  due_date             DateTime?
+  status               String   @default("Not Started") 
+  priority             String   @default("Medium")      
+  planned_hours        Float?
+  actual_hours         Float?
+  blocked_flag         Boolean  @default(false)
+  blocker_reason       String?
+  carry_over_flag      Boolean  @default(false)
+  archived_flag        Boolean  @default(false)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  owner                User?    @relation("TaskOwner", fields: [owner_user_id], references: [id])
+  project              Project? @relation(fields: [project_id], references: [id])
+}
+
+model Meeting {
+  id                   String   @id @default(uuid())
+  external_calendar_id String?
+  title                String
+  organizer_email      String?
+  start_time           DateTime?
+  end_time             DateTime?
+  source_type          String?
+  notes_url            String?
+  transcript_url       String?
+  summary_text         String?
+  raw_source_status    String?
+  imported_at          DateTime?
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+}
+
+model TaskSuggestion {
+  id                     String   @id @default(uuid())
+  meeting_id             String?
+  extracted_text         String?
+  normalized_title       String?
+  proposed_owner_user_id String?
+  proposed_project_id    String?
+  proposed_due_date      DateTime?
+  proposed_priority      String?
+  confidence_score       Float?
+  status                 String?
+  reviewer_user_id       String?
+  reviewed_at            DateTime?
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+}
