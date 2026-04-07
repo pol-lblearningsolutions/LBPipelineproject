@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { useUser } from '../context/UserContext';
+import { Shield, User as UserIcon } from 'lucide-react';
 
 export default function TeamView() {
   const [users, setUsers] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { currentUser } = useUser();
+
+  const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
 
   useEffect(() => {
     fetchData();
@@ -26,6 +31,30 @@ export default function TeamView() {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    try {
+      const res = await fetch(`/api/users/${userId}/role`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser?.id || ''
+        },
+        body: JSON.stringify({ role: newRole })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update role');
+      }
+
+      // Update local state
+      setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    } catch (error: any) {
+      console.error('Failed to change role:', error);
+      alert(error.message);
     }
   };
 
@@ -55,8 +84,8 @@ export default function TeamView() {
   return (
     <div className="p-8 max-w-7xl mx-auto w-full h-full flex flex-col transition-colors duration-200">
       <div className="mb-8 shrink-0">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Team Workload</h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">Overview of active tasks and capacity</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Team Workload & Roles</h1>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">Overview of active tasks, capacity, and team permissions</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 flex-1 overflow-y-auto pr-2 pb-8 content-start">
@@ -69,7 +98,21 @@ export default function TeamView() {
                 </div>
                 <div>
                   <h3 className="font-medium text-gray-900 dark:text-gray-100">{user.full_name}</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{user.role}</p>
+                  {isAdmin && user.id !== currentUser?.id ? (
+                    <select
+                      className="text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 mt-1 text-gray-700 dark:text-gray-300 focus:ring-primary-500 focus:border-primary-500"
+                      value={user.role.toLowerCase()}
+                      onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="member">Member</option>
+                    </select>
+                  ) : (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {user.role.toLowerCase() === 'admin' ? <Shield className="w-3 h-3" /> : <UserIcon className="w-3 h-3" />}
+                      <span className="capitalize">{user.role}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

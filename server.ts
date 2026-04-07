@@ -4,6 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { initDb } from './src/server/db.js';
 import { apiRouter } from './src/server/api.js';
+import { startCronJobs } from './src/server/cron.js';
 
 async function startServer() {
   const app = express();
@@ -14,6 +15,9 @@ async function startServer() {
 
   // Initialize SQLite Database
   await initDb();
+  
+  // Start background jobs
+  startCronJobs();
 
   // API Routes
   app.use('/api', apiRouter);

@@ -6,6 +6,7 @@ import TeamView from './pages/TeamView';
 import MyTasks from './pages/MyTasks';
 import MeetingInbox from './pages/MeetingInbox';
 import Projects from './pages/Projects';
+import AuditLog from './pages/AuditLog';
 import { ThemeProvider } from './context/ThemeContext';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
             <Route path="my-tasks" element={<MyTasks />} />
             <Route path="inbox" element={<MeetingInbox />} />
             <Route path="projects" element={<Projects />} />
+            <Route path="audit-log" element={<AuditLog />} />
           </Route>
         </Routes>
       </BrowserRouter>

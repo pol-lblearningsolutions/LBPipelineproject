@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, Inbox, Users, Briefcase, Settings, Bell, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, Inbox, Users, Briefcase, Settings, Bell, Sun, Moon, ShieldAlert, GripVertical } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
@@ -11,12 +11,23 @@ export default function Layout() {
   const { theme, toggleTheme } = useTheme();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [navOrder, setNavOrder] = useState<string[]>([]);
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentUser) {
       fetchNotifications();
       // Poll for notifications every 30 seconds
       const interval = setInterval(fetchNotifications, 30000);
+      
+      // Load custom navigation order
+      const savedOrder = localStorage.getItem(`sidebar-order-${currentUser.id}`);
+      if (savedOrder) {
+        setNavOrder(JSON.parse(savedOrder));
+      } else {
+        setNavOrder([]);
+      }
+
       return () => clearInterval(interval);
     }
   }, [currentUser]);
@@ -48,7 +59,7 @@ export default function Layout() {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const navigation = [
+  const defaultNavigation = [
     { name: 'Overview Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Task Ledger', href: '/ledger', icon: CheckSquare },
     { name: 'My Tasks', href: '/my-tasks', icon: CheckSquare },
@@ -56,6 +67,53 @@ export default function Layout() {
     { name: 'Team View', href: '/team', icon: Users },
     { name: 'Projects', href: '/projects', icon: Briefcase },
   ];
+
+  if (currentUser?.role?.toLowerCase() === 'admin') {
+    defaultNavigation.push({ name: 'Audit Log', href: '/audit-log', icon: ShieldAlert });
+  }
+
+  const navigation = [...defaultNavigation].sort((a, b) => {
+    const indexA = navOrder.indexOf(a.name);
+    const indexB = navOrder.indexOf(b.name);
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+
+  const handleDragStart = (e: React.DragEvent, name: string) => {
+    setDraggedItem(name);
+    e.dataTransfer.effectAllowed = 'move';
+    // Make the drag image transparent or custom if desired
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetName: string) => {
+    e.preventDefault();
+    if (!draggedItem || draggedItem === targetName) return;
+
+    const currentOrder = navigation.map(n => n.name);
+    const draggedIndex = currentOrder.indexOf(draggedItem);
+    const targetIndex = currentOrder.indexOf(targetName);
+
+    const newOrder = [...currentOrder];
+    newOrder.splice(draggedIndex, 1);
+    newOrder.splice(targetIndex, 0, draggedItem);
+
+    setNavOrder(newOrder);
+    if (currentUser) {
+      localStorage.setItem(`sidebar-order-${currentUser.id}`, JSON.stringify(newOrder));
+    }
+    setDraggedItem(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+  };
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-200">
@@ -122,20 +180,37 @@ export default function Layout() {
           <nav className="px-2 space-y-1">
             {navigation.map((item) => {
               const isActive = location.pathname === item.href;
+              const isDragging = draggedItem === item.name;
+              
               return (
-                <Link
+                <div
                   key={item.name}
-                  to={item.href}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, item.name)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, item.name)}
+                  onDragEnd={handleDragEnd}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                    isActive 
-                      ? "bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400" 
-                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-100"
+                    "flex items-center group relative rounded-md transition-all duration-200",
+                    isDragging ? "opacity-50 scale-95" : "opacity-100 scale-100"
                   )}
                 >
-                  <item.icon className={cn("w-4 h-4", isActive ? "text-primary-600 dark:text-primary-400" : "text-gray-400 dark:text-gray-500")} />
-                  {item.name}
-                </Link>
+                  <div className="absolute left-0 top-0 bottom-0 flex items-center pl-1 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity">
+                    <GripVertical className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+                  </div>
+                  <Link
+                    to={item.href}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors flex-1 ml-4",
+                      isActive 
+                        ? "bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400" 
+                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-100"
+                    )}
+                  >
+                    <item.icon className={cn("w-4 h-4", isActive ? "text-primary-600 dark:text-primary-400" : "text-gray-400 dark:text-gray-500")} />
+                    {item.name}
+                  </Link>
+                </div>
               );
             })}
           </nav>

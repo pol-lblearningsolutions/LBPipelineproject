@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Filter, AlertCircle } from 'lucide-react';
+import { Plus, Search, Filter, AlertCircle, Archive, ArchiveRestore } from 'lucide-react';
 import { format } from 'date-fns';
 import { useUser } from '../context/UserContext';
 
@@ -8,6 +8,7 @@ interface Task {
   id: string;
   task_code: string;
   title: string;
+  description: string | null;
   owner_user_id: string | null;
   project_id: string | null;
   status: 'Not Started' | 'In Progress' | 'Blocked' | 'Pending Review' | 'Complete' | 'Cancelled';
@@ -17,6 +18,8 @@ interface Task {
   due_date: string | null;
   blocked_flag: boolean;
   blocker_reason: string | null;
+  carry_over_flag: boolean;
+  archived_flag: boolean;
 }
 
 const STATUSES = ['Not Started', 'In Progress', 'Blocked', 'Pending Review', 'Complete', 'Cancelled'];
@@ -68,7 +71,10 @@ export default function TodayLedger() {
     try {
       await fetch(`/api/tasks/${taskId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser?.id || ''
+        },
         body: JSON.stringify(updates)
       });
     } catch (error) {
@@ -92,7 +98,10 @@ export default function TodayLedger() {
     try {
       const res = await fetch('/api/tasks', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser?.id || ''
+        },
         body: JSON.stringify(newTask)
       });
       const createdTask = await res.json();
@@ -139,23 +148,69 @@ export default function TodayLedger() {
         <table className="w-full text-left text-sm whitespace-nowrap relative">
           <thead className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 shadow-sm">
             <tr>
-              <th className="px-4 py-3 font-medium">Task</th>
-              <th className="px-4 py-3 font-medium w-32">Owner</th>
-              <th className="px-4 py-3 font-medium w-32">Status</th>
-              <th className="px-4 py-3 font-medium w-32">Due Date</th>
-              <th className="px-4 py-3 font-medium w-24">Priority</th>
-              <th className="px-4 py-3 font-medium">Blocker Reason</th>
+              <th className="px-4 py-3 font-medium w-12 text-center" title="Carry Over">
+                <div className="resize-x overflow-hidden min-w-[2rem] flex items-center justify-center">CO</div>
+              </th>
+              <th className="px-4 py-3 font-medium">
+                <div className="resize-x overflow-hidden min-w-[4rem]">Task</div>
+              </th>
+              <th className="px-4 py-3 font-medium">
+                <div className="resize-x overflow-hidden min-w-[6rem]">Description</div>
+              </th>
+              <th className="px-4 py-3 font-medium w-32">
+                <div className="resize-x overflow-hidden min-w-[4rem]">Owner</div>
+              </th>
+              <th className="px-4 py-3 font-medium w-40">
+                <div className="resize-x overflow-hidden min-w-[4rem]">Project</div>
+              </th>
+              <th className="px-4 py-3 font-medium w-32">
+                <div className="resize-x overflow-hidden min-w-[4rem]">Status</div>
+              </th>
+              <th className="px-4 py-3 font-medium w-32">
+                <div className="resize-x overflow-hidden min-w-[4rem]">Due Date</div>
+              </th>
+              <th className="px-4 py-3 font-medium w-24">
+                <div className="resize-x overflow-hidden min-w-[4rem]">Priority</div>
+              </th>
+              <th className="px-4 py-3 font-medium w-24">
+                <div className="resize-x overflow-hidden min-w-[4rem]">Plan Hrs</div>
+              </th>
+              <th className="px-4 py-3 font-medium w-24">
+                <div className="resize-x overflow-hidden min-w-[4rem]">Act Hrs</div>
+              </th>
+              <th className="px-4 py-3 font-medium">
+                <div className="resize-x overflow-hidden min-w-[6rem]">Blocker Reason</div>
+              </th>
+              <th className="px-4 py-3 font-medium w-12 text-center"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
             {filteredTasks.map(task => (
               <tr key={task.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
+                <td className="px-4 py-2 text-center">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 bg-transparent"
+                    checked={task.carry_over_flag || false}
+                    onChange={(e) => handleInlineEdit(task.id, { carry_over_flag: e.target.checked })}
+                    title="Mark as Carry Over"
+                  />
+                </td>
                 <td className="px-4 py-2">
                   <input 
                     type="text" 
                     className="w-full bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600"
                     value={task.title}
                     onChange={(e) => handleInlineEdit(task.id, { title: e.target.value })}
+                  />
+                </td>
+                <td className="px-4 py-2">
+                  <input 
+                    type="text" 
+                    className="w-full bg-transparent border-none focus:ring-0 p-0 text-gray-700 dark:text-gray-300 text-sm placeholder-gray-400 dark:placeholder-gray-600"
+                    value={task.description || ''}
+                    placeholder="Add description..."
+                    onChange={(e) => handleInlineEdit(task.id, { description: e.target.value })}
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -167,6 +222,18 @@ export default function TodayLedger() {
                     <option value="" className="dark:bg-gray-800 text-gray-400">Unassigned</option>
                     {users.map(u => (
                       <option key={u.id} value={u.id} className="dark:bg-gray-800">{u.full_name}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-4 py-2">
+                  <select 
+                    className="bg-transparent border-none focus:ring-0 p-0 text-gray-700 dark:text-gray-300 cursor-pointer w-full text-sm"
+                    value={task.project_id || ''}
+                    onChange={(e) => handleInlineEdit(task.id, { project_id: e.target.value || null })}
+                  >
+                    <option value="" className="dark:bg-gray-800 text-gray-400">Unassigned</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id} className="dark:bg-gray-800">{p.name}</option>
                     ))}
                   </select>
                 </td>
@@ -215,6 +282,24 @@ export default function TodayLedger() {
                 </td>
                 <td className="px-4 py-2">
                   <input 
+                    type="number" step="0.5"
+                    className="w-16 bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600"
+                    value={task.planned_hours || ''}
+                    placeholder="-"
+                    onChange={(e) => handleInlineEdit(task.id, { planned_hours: e.target.value ? parseFloat(e.target.value) : null })}
+                  />
+                </td>
+                <td className="px-4 py-2">
+                  <input 
+                    type="number" step="0.5"
+                    className="w-16 bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600"
+                    value={task.actual_hours || ''}
+                    placeholder="-"
+                    onChange={(e) => handleInlineEdit(task.id, { actual_hours: e.target.value ? parseFloat(e.target.value) : null })}
+                  />
+                </td>
+                <td className="px-4 py-2">
+                  <input 
                     type="text" 
                     className={`w-full bg-transparent border-none focus:ring-0 p-0 text-xs ${task.status === 'Blocked' ? 'text-red-600 dark:text-red-400 font-medium placeholder-red-300 dark:placeholder-red-900/50' : 'text-gray-500 dark:text-gray-400 placeholder-gray-400 dark:placeholder-gray-600'}`}
                     value={task.blocker_reason || ''}
@@ -223,11 +308,20 @@ export default function TodayLedger() {
                     disabled={task.status !== 'Blocked'}
                   />
                 </td>
+                <td className="px-4 py-2 text-center">
+                  <button 
+                    onClick={() => handleInlineEdit(task.id, { archived_flag: !task.archived_flag })}
+                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors opacity-0 group-hover:opacity-100"
+                    title={task.archived_flag ? "Unarchive Task" : "Archive Task"}
+                  >
+                    {task.archived_flag ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                  </button>
+                </td>
               </tr>
             ))}
             {filteredTasks.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colSpan={11} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                   No tasks for today. Add one to get started.
                 </td>
               </tr>

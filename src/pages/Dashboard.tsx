@@ -12,7 +12,7 @@ export default function Dashboard() {
     async function fetchDashboardData() {
       try {
         const [tasksRes, projectsRes, usersRes] = await Promise.all([
-          fetch('/api/tasks'),
+          fetch('/api/tasks?include_archived=true'),
           fetch('/api/projects'),
           fetch('/api/users')
         ]);

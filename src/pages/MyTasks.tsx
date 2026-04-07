@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { CheckSquare, Clock, AlertCircle, PauseCircle, PlayCircle } from 'lucide-react';
+import { CheckSquare, Clock, AlertCircle, PauseCircle, PlayCircle, Archive, ArchiveRestore } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { cn } from '../lib/utils';
 
 export default function MyTasks() {
   const [tasks, setTasks] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('All Active');
   const { currentUser } = useUser();
@@ -19,9 +20,14 @@ export default function MyTasks() {
     if (!currentUser) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/tasks?owner_id=${currentUser.id}`);
-      const data = await res.json();
-      setTasks(data);
+      const [tasksRes, projectsRes] = await Promise.all([
+        fetch(`/api/tasks?owner_id=${currentUser.id}&include_archived=true`),
+        fetch('/api/projects')
+      ]);
+      const tasksData = await tasksRes.json();
+      const projectsData = await projectsRes.json();
+      setTasks(tasksData);
+      setProjects(projectsData);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -36,7 +42,10 @@ export default function MyTasks() {
     try {
       await fetch(`/api/tasks/${taskId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser?.id || ''
+        },
         body: JSON.stringify(updates)
       });
     } catch (error) {
@@ -47,6 +56,8 @@ export default function MyTasks() {
   };
 
   const filteredTasks = tasks.filter(task => {
+    if (filter === 'Archived') return task.archived_flag;
+    if (task.archived_flag) return false; // Hide archived from other tabs
     if (filter === 'All Active') return task.status !== 'Complete';
     if (filter === 'In Progress') return task.status === 'In Progress';
     if (filter === 'Blocked') return task.status === 'Blocked';
@@ -55,7 +66,7 @@ export default function MyTasks() {
     return true;
   });
 
-  const tabs = ['All Active', 'In Progress', 'Blocked', 'On Hold', 'Completed'];
+  const tabs = ['All Active', 'In Progress', 'Blocked', 'On Hold', 'Completed', 'Archived'];
 
   if (loading || !currentUser) return <div className="p-8 text-gray-500 dark:text-gray-400">Loading...</div>;
 
@@ -103,37 +114,72 @@ export default function MyTasks() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-4">
                   <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{task.title}</h4>
-                  <select 
-                    className={cn(
-                      "text-xs font-medium rounded px-2 py-1 border-none focus:ring-0 cursor-pointer transition-colors",
-                      task.status === 'Complete' ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
-                      task.status === 'Blocked' ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" :
-                      task.status === 'In Progress' ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400" :
-                      task.status === 'On Hold' ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400" :
-                      "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                  <div className="flex items-center gap-2">
+                    {task.carry_over_flag && (
+                      <span className="text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 px-2 py-1 rounded">
+                        Carry Over
+                      </span>
                     )}
-                    value={task.status}
-                    onChange={(e) => {
-                      const newStatus = e.target.value;
-                      const updates: any = { status: newStatus };
-                      if (newStatus === 'Blocked') {
-                        updates.blocked_flag = true;
-                      } else if (task.status === 'Blocked') {
-                        updates.blocked_flag = false;
-                        updates.blocker_reason = null;
-                      }
-                      handleInlineEdit(task.id, updates);
-                    }}
-                  >
-                    <option className="dark:bg-gray-800 text-gray-900 dark:text-gray-100">Not Started</option>
-                    <option className="dark:bg-gray-800 text-gray-900 dark:text-gray-100">In Progress</option>
-                    <option className="dark:bg-gray-800 text-gray-900 dark:text-gray-100">On Hold</option>
-                    <option className="dark:bg-gray-800 text-gray-900 dark:text-gray-100">Blocked</option>
-                    <option className="dark:bg-gray-800 text-gray-900 dark:text-gray-100">Complete</option>
-                  </select>
+                    <select 
+                      className={cn(
+                        "text-xs font-medium rounded px-2 py-1 border-none focus:ring-0 cursor-pointer transition-colors",
+                        task.status === 'Complete' ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
+                        task.status === 'Blocked' ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" :
+                        task.status === 'In Progress' ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400" :
+                        task.status === 'On Hold' ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400" :
+                        "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                      )}
+                      value={task.status}
+                      onChange={(e) => {
+                        const newStatus = e.target.value;
+                        const updates: any = { status: newStatus };
+                        if (newStatus === 'Blocked') {
+                          updates.blocked_flag = true;
+                        } else if (task.status === 'Blocked') {
+                          updates.blocked_flag = false;
+                          updates.blocker_reason = null;
+                        }
+                        handleInlineEdit(task.id, updates);
+                      }}
+                    >
+                      <option className="dark:bg-gray-800 text-gray-900 dark:text-gray-100">Not Started</option>
+                      <option className="dark:bg-gray-800 text-gray-900 dark:text-gray-100">In Progress</option>
+                      <option className="dark:bg-gray-800 text-gray-900 dark:text-gray-100">On Hold</option>
+                      <option className="dark:bg-gray-800 text-gray-900 dark:text-gray-100">Blocked</option>
+                      <option className="dark:bg-gray-800 text-gray-900 dark:text-gray-100">Complete</option>
+                    </select>
+                    <button 
+                      onClick={() => handleInlineEdit(task.id, { archived_flag: !task.archived_flag })}
+                      className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                      title={task.archived_flag ? "Unarchive Task" : "Archive Task"}
+                    >
+                      {task.archived_flag ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-1 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                <div className="mt-1">
+                  <input 
+                    type="text" 
+                    className="w-full bg-transparent border-none focus:ring-0 p-0 text-gray-700 dark:text-gray-300 text-sm placeholder-gray-400 dark:placeholder-gray-600"
+                    value={task.description || ''}
+                    placeholder="Add description..."
+                    onChange={(e) => handleInlineEdit(task.id, { description: e.target.value })}
+                  />
+                </div>
+                <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                   <span className="font-mono">{task.task_code}</span>
+                  <span className="flex items-center gap-1">
+                    <select 
+                      className="bg-transparent border-none focus:ring-0 p-0 text-xs text-gray-500 dark:text-gray-400 cursor-pointer max-w-[120px] truncate"
+                      value={task.project_id || ''}
+                      onChange={(e) => handleInlineEdit(task.id, { project_id: e.target.value || null })}
+                    >
+                      <option value="" className="dark:bg-gray-800">No Project</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id} className="dark:bg-gray-800">{p.name}</option>
+                      ))}
+                    </select>
+                  </span>
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     Due: 
@@ -149,6 +195,37 @@ export default function MyTasks() {
                       Priority: {task.priority}
                     </span>
                   )}
+                  <span className="flex items-center gap-1">
+                    Plan: 
+                    <input 
+                      type="number" step="0.5"
+                      className="w-12 bg-transparent border-none focus:ring-0 p-0 text-xs text-gray-500 dark:text-gray-400"
+                      value={task.planned_hours || ''}
+                      placeholder="-"
+                      onChange={(e) => handleInlineEdit(task.id, { planned_hours: e.target.value ? parseFloat(e.target.value) : null })}
+                    />
+                    hrs
+                  </span>
+                  <span className="flex items-center gap-1">
+                    Actual: 
+                    <input 
+                      type="number" step="0.5"
+                      className="w-12 bg-transparent border-none focus:ring-0 p-0 text-xs text-gray-500 dark:text-gray-400"
+                      value={task.actual_hours || ''}
+                      placeholder="-"
+                      onChange={(e) => handleInlineEdit(task.id, { actual_hours: e.target.value ? parseFloat(e.target.value) : null })}
+                    />
+                    hrs
+                  </span>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 bg-transparent w-3 h-3"
+                      checked={task.carry_over_flag || false}
+                      onChange={(e) => handleInlineEdit(task.id, { carry_over_flag: e.target.checked })}
+                    />
+                    Carry Over
+                  </label>
                 </div>
               </div>
             </li>
