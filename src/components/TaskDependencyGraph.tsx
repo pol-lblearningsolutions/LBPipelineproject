@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import ReactFlow, { Background, Controls, Edge, Node, useNodesState, useEdgesState } from 'reactflow';
+import React, { useEffect, useCallback } from 'react';
+import ReactFlow, { Background, Controls, Edge, Node, useNodesState, useEdgesState, addEdge, Connection } from 'reactflow';
 import 'reactflow/dist/style.css';
 
 interface Task {
@@ -17,9 +17,11 @@ interface Dependency {
 interface Props {
   tasks: Task[];
   dependencies: Dependency[];
+  onAddDependency?: (taskId: string, dependsOnTaskId: string) => void;
+  onRemoveDependency?: (taskId: string, dependencyId: string) => void;
 }
 
-export default function TaskDependencyGraph({ tasks, dependencies }: Props) {
+export default function TaskDependencyGraph({ tasks, dependencies, onAddDependency, onRemoveDependency }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
@@ -55,6 +57,21 @@ export default function TaskDependencyGraph({ tasks, dependencies }: Props) {
     setEdges(newEdges);
   }, [tasks, dependencies, setNodes, setEdges]);
 
+  const onConnect = useCallback((params: Connection | Edge) => {
+    if (onAddDependency && params.source && params.target) {
+      onAddDependency(params.target, params.source);
+    }
+    setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#9ca3af' } }, eds));
+  }, [onAddDependency, setEdges]);
+
+  const onEdgesDelete = useCallback((edgesToDelete: Edge[]) => {
+    if (onRemoveDependency) {
+      edgesToDelete.forEach(edge => {
+        onRemoveDependency(edge.target, edge.id);
+      });
+    }
+  }, [onRemoveDependency]);
+
   return (
     <div style={{ height: 400, width: '100%' }} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900/50">
       <ReactFlow 
@@ -62,6 +79,8 @@ export default function TaskDependencyGraph({ tasks, dependencies }: Props) {
         edges={edges} 
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onEdgesDelete={onEdgesDelete}
         fitView
       >
         <Background />

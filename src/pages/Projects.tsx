@@ -813,11 +813,17 @@ export default function Projects() {
                 {/* Task Dependency Graph */}
                 {tasks.length > 0 && (
                   <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors duration-200">
-                    <div className="bg-gray-50 dark:bg-gray-900/50 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className="bg-gray-50 dark:bg-gray-900/50 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Dependency Graph</h3>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Drag between nodes to link tasks. Select an edge and press Backspace to remove.</span>
                     </div>
                     <div className="p-4">
-                      <TaskDependencyGraph tasks={tasks} dependencies={dependencies} />
+                      <TaskDependencyGraph 
+                        tasks={tasks} 
+                        dependencies={dependencies} 
+                        onAddDependency={handleAddDependency}
+                        onRemoveDependency={handleRemoveDependency}
+                      />
                     </div>
                   </div>
                 )}
